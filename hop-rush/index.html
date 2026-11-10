@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hop Rush · Fugio</title>
+<meta name="description" content="Hop Rush: a blocky road-crossing race for the classroom. Fill the gap to hop forward; the first one to the ice-cream van wins.">
+<link rel="icon" href="art/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+/* Hop Rush: everything is drawn in a blocky pixel style. --u is one "pixel" of the frames (thicker on big boards). */
+:root{--u:clamp(3px,.32vw,6px);--ink:#0d1030;--panel:#262b5c;--panel2:#323872;--deep:#171a3d;--hi:#ffd23f;--ok:#3ddc84;--no:#ff4d6d;--sky:#5ec8ff;--pink:#ff5fb8;
+  --px:'Press Start 2P',ui-monospace,monospace;--pf:'Pixelify Sans',ui-rounded,system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#7ccf5a;color:#fff;font-family:var(--pf);-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button{font:inherit;color:inherit}
+[hidden]{display:none!important}
+#world{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+/* the pixel frame: notched corners, a dark outline and a light/dark bevel */
+.px{position:relative;background:var(--panel);border:var(--u) solid var(--ink);
+  box-shadow:inset calc(-1*var(--u)) calc(-1*var(--u)) 0 rgba(0,0,0,.3),inset var(--u) var(--u) 0 rgba(255,255,255,.13);
+  clip-path:polygon(0 var(--u),var(--u) var(--u),var(--u) 0,calc(100% - var(--u)) 0,calc(100% - var(--u)) var(--u),100% var(--u),100% calc(100% - var(--u)),calc(100% - var(--u)) calc(100% - var(--u)),calc(100% - var(--u)) 100%,var(--u) 100%,var(--u) calc(100% - var(--u)),0 calc(100% - var(--u)))}
+.pbtn{--c:#5b5ff0;position:relative;cursor:pointer;background:var(--c);border:var(--u) solid var(--ink);color:#fff;font-family:var(--px);text-shadow:2px 2px 0 rgba(0,0,0,.35);
+  box-shadow:inset calc(-1*var(--u)) calc(-1.5*var(--u)) 0 rgba(0,0,0,.32),inset var(--u) var(--u) 0 rgba(255,255,255,.3);
+  clip-path:polygon(0 var(--u),var(--u) var(--u),var(--u) 0,calc(100% - var(--u)) 0,calc(100% - var(--u)) var(--u),100% var(--u),100% calc(100% - var(--u)),calc(100% - var(--u)) calc(100% - var(--u)),calc(100% - var(--u)) 100%,var(--u) 100%,var(--u) calc(100% - var(--u)),0 calc(100% - var(--u)));
+  transition:transform .06s,filter .15s}
+.pbtn:hover:not(:disabled){filter:brightness(1.1)}
+.pbtn:active:not(:disabled){transform:translateY(var(--u));box-shadow:inset var(--u) var(--u) 0 rgba(0,0,0,.3)}
+.pbtn:disabled{cursor:default;filter:saturate(.3) brightness(.8)}
+.pbtn.yellow{--c:var(--hi);color:var(--ink);text-shadow:none}
+.pbtn.green{--c:#2fbf6c} .pbtn.pink{--c:var(--pink)} .pbtn.dark{--c:var(--deep)}
+.ptitle{font-family:var(--px);color:var(--hi);text-shadow:calc(var(--u)*.8) calc(var(--u)*.8) 0 var(--ink)}
+
+/* ---------- lobby */
+#lobby{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:1.6vh;padding:2vh 2vw 2.4vh;
+  background:linear-gradient(rgba(13,16,48,.0) 0%,rgba(13,16,48,.0) 35%,rgba(13,16,48,.45) 100%)}
+.lb-title{position:absolute;top:2.6vh;left:0;right:0;text-align:center;pointer-events:none}
+.lb-title h1{margin:0;font-family:var(--px);font-weight:400;font-size:clamp(34px,8vh,96px);line-height:1;color:#fff;letter-spacing:.04em;
+  text-shadow:.06em .06em 0 var(--ink),-.03em -.03em 0 var(--ink),.03em -.03em 0 var(--ink),-.03em .03em 0 var(--ink)}
+.lb-title h1 span{color:var(--hi)}
+.lb-title p{display:inline-block;margin:2vh 0 0;padding:1.1vh 1.4vw;font-size:clamp(15px,2.4vh,26px);font-weight:600;background:rgba(13,16,48,.72);border:var(--u) solid var(--ink)}
+.lb-panel{width:min(1500px,96vw);padding:1.8vh 1.4vw;display:flex;flex-direction:column;gap:1.6vh}
+.lb-top{display:flex;align-items:center;gap:1.4vw;flex-wrap:wrap}
+.lab{font-family:var(--px);font-size:clamp(10px,1.45vh,15px);color:#c9cdf8;letter-spacing:.04em}
+.seg{display:flex;gap:calc(var(--u)*1.5)}
+.seg button{min-width:5.5vh;padding:1.1vh 1vw;font-size:clamp(11px,1.7vh,18px)}
+.seg button.on{--c:var(--hi);color:var(--ink);text-shadow:none}
+.slots{display:grid;grid-template-columns:repeat(var(--n,4),1fr);gap:1vw}
+.slot{--ring:#fff;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:.6vw;padding:1.2vh .8vw;background:var(--panel2)}
+.slot .who{display:flex;flex-direction:column;align-items:center;gap:.8vh;min-width:0}
+.slot .pic{position:relative;width:min(13vh,8vw);aspect-ratio:1;background:radial-gradient(circle at 50% 60%,color-mix(in srgb,var(--ring) 55%,#fff) 0%,var(--ring) 70%);border:var(--u) solid var(--ink);display:grid;place-items:center;cursor:pointer}
+.slot .pic img,.slot .pic canvas{width:100%;height:100%;image-rendering:pixelated;display:block}
+.slot .tagp{font-family:var(--px);white-space:nowrap;font-size:clamp(9px,1.35vh,14px);background:var(--ring);color:var(--ink);padding:.6vh .6vw}
+.slot input{width:100%;min-width:0;text-align:center;font:600 clamp(14px,2.3vh,24px) var(--pf);color:#fff;background:var(--deep);border:var(--u) solid var(--ink);padding:.7vh .4vw;outline:none;-webkit-user-select:text;user-select:text}
+.slot input:focus{border-color:var(--hi)}
+.slot .arr{padding:1.4vh .55vw;font-size:clamp(10px,1.6vh,16px)}
+.lb-set{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:1vw;align-items:stretch}
+.opt{display:flex;flex-direction:column;justify-content:center;gap:1vh;padding:1.2vh 1vw;background:var(--panel2)}
+.qcard{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:1vw;padding:1.2vh 1vw;text-align:left;cursor:pointer;background:var(--panel2);color:#fff}
+.qcard:hover{background:#3b4282}
+.qcard .lv{display:grid;place-items:center;width:7vh;height:7vh;font-family:var(--px);font-size:clamp(11px,2vh,20px);color:var(--ink);background:var(--c,#5ee08a);border:var(--u) solid var(--ink)}
+.qcard .t{min-width:0;display:flex;flex-direction:column;gap:.5vh}
+.qcard .t b{font:700 clamp(15px,2.5vh,26px) var(--pf);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qcard .t small{font-size:clamp(12px,1.7vh,17px);color:#c9cdf8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qcard .go{font-family:var(--px);font-size:clamp(10px,1.4vh,14px);color:var(--hi)}
+.stepper{display:flex;align-items:center;gap:.8vw}
+.stepper b{min-width:5ch;text-align:center;font-family:var(--px);font-size:clamp(12px,2vh,20px);color:var(--hi)}
+.stepper .pbtn{padding:.9vh 1vw;font-size:clamp(12px,1.8vh,18px)}
+.lb-go{display:flex;gap:1vw;align-items:center;justify-content:space-between}
+.lb-how{display:flex;gap:1.6vw;font-size:clamp(13px,2vh,21px);font-weight:600;color:#dfe2ff;flex-wrap:wrap}
+.lb-how span b{font-family:var(--px);font-size:.75em;color:var(--hi);margin-right:.5em}
+#startBtn{padding:2vh 2.4vw;font-size:clamp(14px,2.6vh,28px)}
+
+/* ---------- top bar during the race */
+#hud{position:fixed;top:1.4vh;left:1vw;right:1vw;display:flex;align-items:center;gap:1vw;pointer-events:none}
+#hud>*{pointer-events:auto}
+#hud .pbtn{padding:1.2vh 1vw;font-size:clamp(10px,1.6vh,16px)}
+#track{flex:1;height:6.4vh;min-height:40px;padding:0 3vh 0 2vh;background:var(--deep)}
+#track .road{position:absolute;left:2vh;right:5vh;top:50%;height:calc(var(--u)*2);transform:translateY(-50%);background:repeating-linear-gradient(90deg,#fff 0 12px,transparent 12px 24px);opacity:.35}
+#track .flag{position:absolute;right:.8vh;top:50%;transform:translateY(-50%);width:3.6vh;height:3.6vh;background:conic-gradient(#fff 0 25%,#111 0 50%,#fff 0 75%,#111 0) 0 0/50% 50%;border:var(--u) solid var(--ink)}
+#track .head{position:absolute;top:50%;width:3.8vh;height:3.8vh;min-width:24px;min-height:24px;transform:translate(-50%,-50%);background:var(--ring);border:var(--u) solid var(--ink);transition:left .35s steps(6)}
+#track .head img{width:100%;height:100%;image-rendering:pixelated;display:block}
+#track .head.on{z-index:2;outline:var(--u) solid #fff}
+#muteBtn svg{width:2.4vh;height:2.4vh;min-width:16px;min-height:16px;display:block}
+
+/* name tags over the characters */
+#tags{position:fixed;inset:0;pointer-events:none}
+.tag{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font-family:var(--px);font-size:clamp(9px,1.35vh,14px);white-space:nowrap;color:var(--ink);background:var(--ring);border:calc(var(--u)*.75) solid var(--ink);padding:.5vh .5vw;transition:opacity .2s}
+.tag.on{font-size:clamp(11px,1.7vh,18px)}
+.tag.on::after{content:"";position:absolute;left:50%;top:calc(100% + .6vh);width:1.6vh;height:1.6vh;transform:translateX(-50%);background:var(--ring);
+  clip-path:polygon(0 0,100% 0,100% 34%,66% 34%,66% 67%,34% 67%,34% 34%,0 34%,0 0,34% 34%,34% 67%,50% 100%,66% 67%);animation:bob .6s steps(2) infinite}
+@keyframes bob{50%{transform:translate(-50%,.5vh)}}
+
+/* ---------- the players' cards (as in Defeat the Monster / Gummy the Fisherman): one each, in a fixed place along the bottom */
+#cards{position:fixed;left:1vw;right:1vw;bottom:1.4vh;height:38vh;display:grid;gap:1vw;transition:grid-template-columns .25s steps(5)}
+.card{--ring:#fff;display:flex;flex-direction:column;gap:1vh;padding:1.1vh .8vw 1.4vh;min-width:0;transition:transform .2s steps(3)}
+.card.active{background:#2e3470;border-color:var(--ring);transform:translateY(-1.2vh)}
+.c-head{display:flex;align-items:center;gap:.6vw;min-width:0}
+.c-num{font-family:var(--px);font-size:clamp(10px,1.55vh,16px);color:var(--ink);background:var(--ring);padding:.7vh .5vw}
+.c-name{flex:1;min-width:0;font-weight:700;font-size:clamp(14px,2.6vh,28px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-chip{font-family:var(--px);font-size:clamp(9px,1.3vh,13px);padding:.6vh .5vw;white-space:nowrap}
+.c-chip:empty{display:none}
+.card.active .c-chip{background:var(--hi);color:var(--ink);animation:blink 1s steps(2) infinite}
+.card.next .c-chip{background:var(--deep);color:#c9cdf8}
+@keyframes blink{50%{filter:brightness(1.25)}}
+.c-row{font-family:var(--px);font-size:clamp(9px,1.35vh,14px);color:var(--hi);white-space:nowrap}
+.c-mid{flex:1;min-height:0;display:flex;gap:.7vw}
+.c-pic{position:relative;flex:none;height:100%;aspect-ratio:1;max-width:40%;background:radial-gradient(circle at 50% 62%,color-mix(in srgb,var(--ring) 50%,#fff),var(--ring) 72%);border:var(--u) solid var(--ink)}
+.c-pic img{width:100%;height:100%;object-fit:cover;image-rendering:pixelated;display:block}
+.c-pic canvas,.slot .pic canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;display:block}
+.c-streak{position:absolute;right:-2px;bottom:-2px;font-family:var(--px);font-size:clamp(8px,1.25vh,13px);background:#ff8a2a;color:#fff;padding:.4vh .3vw;border:calc(var(--u)*.75) solid var(--ink)}
+.c-streak:empty{display:none}
+.c-msg{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:.8vh .8vw;background:var(--deep);border:var(--u) solid var(--ink);
+  font-weight:700;font-size:clamp(14px,2.5vh,28px);line-height:1.25;overflow:hidden;overflow-wrap:anywhere}
+.c-msg .wait{color:#8e93cf;font-family:var(--px);font-size:clamp(7px,min(1.6vh,1.05vw),16px);white-space:nowrap}
+.c-msg .ok{color:var(--ok)} .c-msg .no{color:var(--no);text-decoration:line-through;text-decoration-thickness:3px}
+.c-msg .ar{color:#8e93cf;margin:0 .35em}
+.card:not(.active) .c-msg{overflow-wrap:normal;word-break:keep-all}
+.c-msg .hops{display:block;margin-top:.6vh;font-family:var(--px);font-size:.55em;color:var(--hi)}
+.sent .gap{display:inline-block;min-width:3.2em;margin:0 .15em;border-bottom:calc(var(--u)*1.1) dashed var(--hi);color:transparent;line-height:1}
+.sent .gap.ok{color:var(--ok);border-bottom-color:var(--ok)}
+.sent .gap.no{color:var(--ok);border-bottom-color:var(--no)}
+.c-ans{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5vw;height:8.4vh;flex:none}
+.c-ans .pbtn{font-family:var(--pf);font-weight:700;font-size:clamp(14px,2.7vh,30px);padding:.3vh .3vw;line-height:1.05;overflow-wrap:anywhere;text-shadow:none;--c:#5b5ff0}
+.c-ans .pbtn .k{position:absolute;left:.5vh;top:.3vh;font-family:var(--px);font-size:clamp(7px,1.05vh,11px);opacity:.7}
+.card:not(.active) .c-ans .pbtn{--c:#3a3f80;color:#8e93cf}
+.c-ans .pbtn.right{--c:#2fbf6c;color:#fff;filter:none}
+.c-ans .pbtn.wrong{--c:var(--no);color:#fff;filter:none}
+.c-ans .pbtn.reveal{--c:#2fbf6c;color:#fff;filter:none;animation:blink .5s steps(2) 3}
+.c-ans .pbtn.dim{opacity:.35}
+.c-ans .hop{grid-column:1/-1;--c:#2fbf6c;font-family:var(--px);font-size:clamp(14px,3vh,32px);display:flex;align-items:center;justify-content:center;gap:1.4vw;animation:hopglow .5s steps(2) infinite}
+.c-ans .hop .pips{display:flex;gap:.5vh}
+.c-ans .hop .pips i{width:2.2vh;height:2.2vh;background:var(--hi);border:calc(var(--u)*.6) solid var(--ink)}
+.c-ans .hop .pips i.used{background:transparent;opacity:.4}
+@keyframes hopglow{50%{--c:#3ddc84}}
+.c-bar{position:relative;height:2.4vh;min-height:14px;flex:none;background:var(--deep);border:calc(var(--u)*.75) solid var(--ink)}
+.c-bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--sky)}
+.c-bar i.low{background:var(--no)}
+.c-bar i.hopt{background:var(--hi)}
+.c-bar span{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--px);font-size:clamp(8px,1.2vh,12px);color:#fff;text-shadow:1px 1px 0 var(--ink)}
+
+/* little numbers that pop up (+3 HOPS, OOPS…) */
+.burst{position:fixed;z-index:50;transform:translate(-50%,-50%);font-family:var(--px);font-size:clamp(16px,3.2vh,36px);pointer-events:none;
+  text-shadow:3px 3px 0 var(--ink);animation:burst 1.3s steps(12) forwards}
+@keyframes burst{0%{opacity:0;transform:translate(-50%,-20%) scale(.6)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-150%)}}
+
+/* ---------- countdown and banners */
+#big{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;z-index:40}
+#big b{font-family:var(--px);font-weight:400;font-size:clamp(60px,18vh,220px);color:var(--hi);text-shadow:.07em .07em 0 var(--ink);animation:pop .9s steps(9) forwards}
+#big b.go{color:var(--ok)}
+#big b.small{font-size:clamp(28px,8vh,96px)}
+@keyframes pop{0%{transform:scale(2.2);opacity:0}25%{transform:scale(1);opacity:1}80%{opacity:1}100%{opacity:0;transform:scale(.9)}}
+
+/* ---------- results */
+#final{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:2vh;padding:2.4vh 2vw 2.4vh;
+  background:linear-gradient(rgba(13,16,48,.45),transparent 20%,transparent 55%,rgba(13,16,48,.6) 72%);pointer-events:none}
+#final>*{pointer-events:auto}
+.fin-top,.fin-bot{display:flex;flex-direction:column;align-items:center;gap:1.4vh;width:100%}
+#final h2{margin:0;font-size:clamp(26px,6.6vh,80px);font-weight:400;text-align:center}
+#final .win{padding:1vh 1.6vw;font-size:clamp(16px,2.8vh,32px);font-weight:700;text-align:center;border-color:var(--ring)}
+#final .win small{display:block;margin-top:.3vh;font-size:.6em;font-weight:600;color:#c9cdf8}
+.ranks{display:grid;grid-template-columns:repeat(var(--n,4),minmax(0,1fr));gap:1vw;width:min(1500px,96vw)}
+.rk{display:grid;grid-template-columns:auto 11vh minmax(0,1fr);grid-template-rows:auto 1fr;column-gap:.8vw;row-gap:.5vh;align-items:center;padding:1vh .8vw;background:var(--panel2)}
+.rk.first{border-color:var(--hi);background:#3b3f7a}
+.rk .pl{grid-row:1/3;font-family:var(--px);font-size:clamp(14px,3.4vh,34px);color:var(--hi)}
+.rk canvas{grid-row:1/3;width:11vh;height:11vh;image-rendering:pixelated;background:radial-gradient(circle at 50% 62%,color-mix(in srgb,var(--ring) 50%,#fff),var(--ring) 72%);border:calc(var(--u)*.75) solid var(--ink)}
+.rk b{font-size:clamp(15px,2.7vh,30px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk .st{display:grid;grid-template-columns:repeat(2,auto);gap:.4vh .8vw;justify-content:start}
+.rk span{font-family:var(--px);font-size:clamp(7px,1.1vh,12px);color:#c9cdf8;text-align:center;line-height:1.6}
+.rk span em{display:block;font-style:normal;font-family:var(--pf);font-weight:700;font-size:clamp(13px,2.2vh,24px);color:#fff}
+.fin-btns{display:flex;gap:1vw;flex-wrap:wrap;justify-content:center}
+.fin-btns .pbtn{padding:1.8vh 1.8vw;font-size:clamp(11px,2vh,20px)}
+
+/* ---------- popups (pause, review) */
+#ov{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:rgba(13,16,48,.6);padding:3vh 2vw}
+.pop{width:min(760px,96vw);max-height:92vh;display:flex;flex-direction:column;gap:1.6vh;padding:2.4vh 1.8vw}
+.pop h3{margin:0;font-size:clamp(16px,3vh,30px);font-weight:400}
+.pop .btns{display:flex;flex-direction:column;gap:1.2vh}
+.pop .btns .pbtn{padding:1.8vh 1vw;font-size:clamp(11px,2vh,20px)}
+.pop.review{width:min(1100px,96vw)}
+.rv{flex:1;overflow:auto;display:flex;flex-direction:column;gap:1.4vh;padding-right:.4vw}
+.rv h4{margin:.6vh 0 0;display:flex;align-items:center;gap:.8vw;font-family:var(--px);font-weight:400;font-size:clamp(11px,1.8vh,18px);color:var(--ring)}
+.rv h4 img{width:4.6vh;height:4.6vh;image-rendering:pixelated;background:var(--ring);border:calc(var(--u)*.6) solid var(--ink)}
+.rv li{font-size:clamp(14px,2.3vh,24px);font-weight:600;line-height:1.35;margin:.5vh 0}
+.rv li .r{color:var(--ok);font-weight:700} .rv li .w{color:var(--no);text-decoration:line-through}
+.rv ol{margin:0;padding-left:2.4em}
+.rv .none{color:#8e93cf}
+
+/* squarer boards (16:10 and narrower): a waiting card shows its character above the last answer, so the picture is wide enough */
+@media (max-aspect-ratio:3/2){
+  .card:not(.active) .c-mid{flex-direction:column;gap:.6vh}
+  .card:not(.active) .c-pic{height:auto;flex:1 1 0;min-height:0;max-width:none;aspect-ratio:auto}
+  .card:not(.active) .c-msg{flex:0 0 auto;min-height:5.5vh;padding:.4vh .4vw}
+}
+@media (max-aspect-ratio:4/3){
+  #cards{height:44vh;grid-template-rows:auto}
+  .lb-set{grid-template-columns:1.3fr 1fr 1fr}
+  .lb-set .seg button{padding:1vh .6vw;font-size:clamp(9px,1.4vh,14px)}
+}
+@media (max-width:760px){
+  .slots{grid-template-columns:repeat(2,1fr)}
+  .lb-set{grid-template-columns:1fr}
+  .lb-how{display:none}
+  .slot .pic{width:12vh}
+}
+
+/* ---------- SOLO: the one-player phone version (fugio.co/hop/solo; game.js puts class "solo" on the body) */
+.solo-only{display:none!important}
+body.solo .solo-only{display:flex!important}
+body.solo p.solo-only{display:inline-block!important}
+body.solo .cls-only{display:none!important}
+body.solo{--u:3px}
+body.solo #lobby{justify-content:flex-start;overflow-y:auto;gap:10px;padding:max(12px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+body.solo .lb-title{position:static;flex:none;padding-top:6px}
+body.solo .lb-title h1{font-size:clamp(30px,min(11vw,7vh),72px);line-height:1.15}
+body.solo .lb-title p{font-size:clamp(14px,4vw,18px);margin:10px 8px 0;padding:8px 10px}
+body.solo .lb-panel{margin-top:auto;width:min(520px,100%);padding:10px;gap:8px;flex:none}
+body.solo .slots{grid-template-columns:1fr}
+body.solo .slot{gap:10px;padding:8px 10px}
+body.solo .slot .pic{width:min(12vh,28vw)}
+body.solo .slot .tagp{font-size:10px;padding:5px 7px}
+body.solo .slot input{font-size:18px;padding:6px}
+body.solo .slot .arr{padding:16px 10px;font-size:14px}
+body.solo .lb-set{grid-template-columns:minmax(0,1fr);gap:6px}
+body.solo .lb-set>*{min-width:0}
+body.solo .qcard,body.solo .opt.riv{grid-column:1/-1}
+body.solo .qcard{padding:8px 10px;gap:10px}
+body.solo .qcard .lv{width:44px;height:44px;font-size:12px}
+body.solo .qcard .t b{font-size:17px} body.solo .qcard .t small{font-size:13px}
+body.solo .qcard .go{font-size:9px}
+body.solo .opt{flex-direction:row;align-items:center;padding:6px 8px;gap:8px}
+body.solo .opt .lab{flex:0 0 64px;text-align:left}
+body.solo .opt.solo-only{display:none!important}
+body.solo .opt.riv{display:flex!important}
+body.solo .lab{font-size:9px}
+body.solo .seg{width:100%}
+body.solo .seg button{flex:1;min-width:0;padding:11px 2px;font-size:10px}
+body.solo .stepper{justify-content:space-between}
+body.solo .stepper .pbtn{padding:9px 10px;font-size:14px}
+body.solo .stepper b{font-size:13px}
+body.solo .lb-go{display:block}
+body.solo #startBtn{width:100%;padding:16px;font-size:16px}
+/* the race: the top bar and one big card for you along the bottom */
+body.solo #hud{top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));gap:6px}
+body.solo #hud .pbtn{padding:11px 9px;font-size:10px}
+body.solo #track{height:44px;min-height:0}
+body.solo #track .head{width:26px;height:26px;min-width:0;min-height:0}
+body.solo #cards{left:50%;right:auto;transform:translateX(-50%);width:min(560px,calc(100vw - 16px));bottom:max(8px,env(safe-area-inset-bottom));height:auto;display:block}
+body.solo .card{gap:8px;padding:10px 10px 12px}
+body.solo .card.active{transform:none}
+body.solo .c-num{display:none}
+body.solo .c-name{font-size:18px}
+body.solo .c-row{font-size:11px}
+body.solo .c-mid{height:15vh;min-height:92px;flex:none;gap:8px}
+body.solo .c-pic{max-width:28%}
+body.solo .c-ans{grid-template-columns:1fr;height:auto;gap:6px}
+body.solo .c-ans .pbtn{min-height:max(48px,6.2vh);font-size:20px}
+body.solo .c-ans .pbtn .k{display:none}
+body.solo .c-ans .hop{min-height:calc(3 * max(48px,6.2vh) + 12px);font-size:22px;gap:14px}
+body.solo .c-ans .hop .pips i{width:16px;height:16px}
+body.solo .c-bar{height:18px;min-height:0}
+body.solo .c-bar span{font-size:9px}
+body.solo .tag{font-size:9px;padding:3px 5px}
+body.solo .tag.on{font-size:11px}
+/* results */
+body.solo #final{padding:max(12px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+body.solo #final h2{font-size:clamp(28px,10vw,64px)}
+body.solo #final .win{font-size:17px;padding:8px 12px}
+body.solo .ranks{grid-template-columns:1fr 1fr;gap:6px;width:min(560px,100%)}
+body.solo .rk{grid-template-columns:auto 52px minmax(0,1fr);padding:6px;column-gap:6px}
+body.solo .rk canvas{width:52px;height:52px}
+body.solo .rk .pl{font-size:16px} body.solo .rk b{font-size:15px}
+body.solo .rk span{font-size:7px} body.solo .rk span em{font-size:14px}
+body.solo .fin-btns{gap:6px;width:min(560px,100%)}
+body.solo .fin-btns .pbtn{flex:1;padding:14px 6px;font-size:10px}
+body.solo .pop .btns .pbtn{padding:16px 10px;font-size:12px}
+/* a phone held sideways: your card on the right, the road on the left */
+@media (orientation:landscape) and (max-height:540px){
+  body.solo .lb-title p{display:none!important}
+  body.solo #cards{left:auto;transform:none;right:max(8px,env(safe-area-inset-right));top:60px;bottom:max(8px,env(safe-area-inset-bottom));width:min(46vw,460px)}
+  body.solo .card{height:100%}
+  body.solo .c-mid{height:auto;flex:1;min-height:0}
+  body.solo .c-ans .pbtn{min-height:38px;font-size:16px}
+  body.solo .c-ans .hop{min-height:126px}
+  body.solo .ranks{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+/* (v12) the "+3 HOPS · 6.2s" pop-up stays on one line, and smaller on a narrow phone */
+.burst{white-space:nowrap}
+@media (max-width:520px){.burst{font-size:clamp(14px,5.4vw,24px)}}
+/* ---------- (v13, the user) the student (solo) lobby: no title or description; a LEAVE button top left back to Fugio;
+   your racer and name top right; the game settings in a panel straight above START RACE. It fits any screen:
+   upright the panel runs along the bottom, sideways it is a column on the right with your racer above it. */
+body.solo .lb-title,body.solo #slots,body.solo .lb-how{display:none!important}
+#leaveBtn{position:fixed;z-index:6;top:max(10px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));padding:12px 14px;font-size:11px}
+#profile{position:fixed;z-index:6;top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));width:min(250px,calc(100vw - 150px));padding:6px;flex-direction:column}
+#profile .slot{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px;padding:8px 6px;background:var(--panel2)}
+#profile .slot .who{gap:6px}
+#profile .slot .pic{width:min(11vh,84px)}
+#profile .slot .tagp{font-size:9px;padding:4px 6px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+#profile .slot input{font-size:16px;padding:6px 4px}
+#profile .slot .arr{padding:14px 8px;font-size:12px}
+body.solo #lobby{justify-content:flex-end;align-items:center;overflow-y:auto}
+body.solo .lb-panel{margin-top:auto}
+body.solo .lb-go{display:block}
+/* sideways (and any wide screen): the right-hand column */
+@media (min-aspect-ratio:1/1){
+  body.solo #lobby{align-items:flex-end;padding-right:max(10px,env(safe-area-inset-right))}
+  body.solo .lb-panel,#profile{width:min(400px,40vw)}
+  body.solo .lb-panel{margin-top:auto}
+  #profile .slot .pic{width:min(13vh,96px)}
+}
+/* a short screen held sideways (a phone): everything a little tighter so the column fits */
+@media (min-aspect-ratio:1/1) and (max-height:520px){
+  #profile{padding:4px}
+  #profile .slot{padding:5px 6px;gap:6px}
+  #profile .slot .who{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto auto;column-gap:8px;row-gap:4px;align-items:center;justify-items:start}
+  #profile .slot .who .pic{grid-row:1/3;width:54px}
+  #profile .slot input{font-size:14px;padding:4px}
+  #profile .slot .arr{padding:10px 6px}
+  body.solo .lb-panel{padding:6px;gap:5px}
+  body.solo .lb-set{gap:4px}
+  body.solo .qcard{padding:5px 8px}
+  body.solo .qcard .lv{width:34px;height:34px;font-size:10px}
+  body.solo .qcard .t b{font-size:14px}body.solo .qcard .t small{font-size:11px}
+  body.solo .opt{padding:3px 8px}
+  body.solo .seg button{padding:8px 2px}
+  body.solo .stepper .pbtn{padding:6px 9px}
+  body.solo #startBtn{padding:11px;font-size:14px}
+}
+/* a big upright screen (a tablet): the panel does not stretch too wide */
+@media (max-aspect-ratio:1/1){ body.solo .lb-panel{width:min(520px,100%)} }
+/* ---------- (v14) FoxKarts features: coins, the power-up slot, the snowball target picker, the shop */
+.c-coins{font-family:var(--px);font-size:clamp(9px,1.3vh,13px);color:var(--hi);white-space:nowrap;margin-left:auto}
+.c-coins::before{content:"";display:inline-block;width:.95em;height:.95em;margin-right:.35em;vertical-align:-.12em;background:radial-gradient(circle at 35% 35%,#fff3a0 0 18%,#ffd23f 20% 62%,#e09000 64%);border:2px solid var(--ink);border-radius:50%}
+.c-item{flex:none;width:clamp(32px,4.6vh,48px);height:clamp(32px,4.6vh,48px);display:grid;place-items:center;padding:0;font-size:clamp(18px,2.8vh,28px);line-height:1;
+  background:var(--deep);border:calc(var(--u)*.75) dashed #5a609e;color:#fff;cursor:pointer}
+.c-item.full{border-style:solid;border-color:var(--hi);background:#3b2a7a;box-shadow:0 0 0 2px var(--ink),0 0 14px rgba(255,210,63,.6);animation:itemGlow 1.2s ease-in-out infinite alternate}
+.c-item.rolling{border-color:#fff;background:#4a3a9a}
+.c-item.pop{animation:itemPop .45s cubic-bezier(.3,1.6,.5,1),itemGlow 1.2s ease-in-out .45s infinite alternate}
+.card:not(.active) .c-item{opacity:.7;cursor:default}
+@keyframes itemGlow{to{box-shadow:0 0 0 2px var(--ink),0 0 22px rgba(255,210,63,.95)}}
+@keyframes itemPop{0%{transform:scale(.4)}100%{transform:scale(1)}}
+.pop.aim{width:min(620px,94vw)}
+.aims{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.aims .pbtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;border-color:var(--ring)}
+.aims img{width:64px;height:64px;image-rendering:pixelated;background:var(--ring);border:3px solid var(--ink)}
+.aims b{font:700 16px var(--pf);color:#fff}.aims small{font-family:var(--px);font-size:10px;color:var(--hi)}
+.pf-bar{display:flex;align-items:center;gap:6px;margin-top:6px;padding:5px 6px;background:var(--deep)}
+.pf-lv{font-family:var(--px);font-size:10px;color:var(--ink);background:var(--hi);padding:4px 5px;white-space:nowrap}
+.pf-lvbar{flex:1;min-width:24px;height:8px;background:#2a2f63;border:2px solid var(--ink);overflow:hidden}.pf-lvbar i{display:block;height:100%;background:linear-gradient(90deg,#ff5fb8,#ffd23f,#3ddc84)}
+.pf-coins{font-family:var(--px);font-size:10px;color:var(--hi);white-space:nowrap}
+.pf-shop{padding:8px 9px;font-size:10px}
+.pop.shop{width:min(560px,94vw)}
+.shop-top{display:flex;align-items:center;gap:10px}
+.shop-top .lvp{font-family:var(--px);font-size:13px;color:var(--ink);background:var(--hi);padding:6px 8px;white-space:nowrap}.shop-top .lvp small{font-size:9px}
+.shop-top .lvbar{flex:1;height:12px;background:#2a2f63;border:3px solid var(--ink);overflow:hidden}.shop-top .lvbar i{display:block;height:100%;background:linear-gradient(90deg,#ff5fb8,#ffd23f,#3ddc84);transition:width .7s}
+.shop-top .cpill{font-family:var(--px);font-size:13px;color:var(--hi);white-space:nowrap}
+.ups{display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.up{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:8px 10px;background:var(--panel2)}
+.up .ic{font-size:30px;line-height:1}
+.up .tx{display:flex;flex-direction:column;gap:3px;min-width:0}.up .tx b{font-family:var(--px);font-size:11px;color:#fff}.up .tx small{font-size:13px;color:#c9cdf8}
+.up .pips{display:flex;gap:4px}.up .pips i{width:14px;height:8px;background:#2a2f63;border:2px solid var(--ink)}.up .pips i.on{background:var(--ok)}
+.up .pbtn{padding:10px 10px;font-size:11px;white-space:nowrap}.up .mx{font-family:var(--px);font-size:11px;color:var(--ok)}
+#winBox .earn{color:var(--hi)}
+.gc{display:inline-block;width:1.05em;height:1.05em;margin-right:.35em;vertical-align:-.15em;background:radial-gradient(circle at 35% 35%,#fff3a0 0 18%,#ffd23f 20% 62%,#e09000 64%);border:2px solid var(--ink);border-radius:50%}
+.pop.shop>.pbtn,.pop.aim>.pbtn{padding:14px 10px;font-size:13px}
+/* (v14) the waiting cards are narrow: the row count goes (the track up top shows it), the name keeps its room */
+body:not(.solo) .card:not(.active) .c-row{display:none}
+.c-head .c-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
+.c-head .c-coins{margin-left:0}
+/* ---------- (v15) game feel: flying coins, sparks, a white flash, speed lines, bigger pop-ups for FAST and streaks */
+#flash{position:fixed;inset:0;z-index:45;pointer-events:none;opacity:0;background:#fff}
+#speed{position:fixed;inset:0;z-index:0;pointer-events:none;display:none;
+  background:repeating-linear-gradient(90deg,transparent 0 46px,rgba(255,255,255,.55) 46px 49px,transparent 49px 97px,rgba(255,255,255,.3) 97px 99px,transparent 99px 140px);background-size:140px 260px;
+  -webkit-mask:radial-gradient(ellipse at 50% 55%,transparent 32%,#000 75%);mask:radial-gradient(ellipse at 50% 55%,transparent 32%,#000 75%)}
+#speed.on{display:block;animation:speed .22s linear infinite}
+@keyframes speed{from{background-position:0 -260px}to{background-position:0 0}}
+.flyc{position:fixed;z-index:56;left:0;top:0;width:18px;height:18px;margin:0;pointer-events:none;will-change:transform}
+.spark{position:fixed;z-index:55;left:0;top:0;width:8px;height:8px;pointer-events:none;border:2px solid var(--ink);will-change:transform}
+.burst.fastb{font-size:clamp(18px,3.8vh,40px)}
+.burst.streakb{font-size:clamp(20px,4.4vh,48px);animation-duration:1.5s}
+.burst.hot{text-shadow:3px 3px 0 var(--ink),0 0 18px rgba(255,138,42,.9)}
+.burst{white-space:normal;text-align:center;line-height:1.25;width:max-content}
+@media (max-width:520px){.burst.fastb{font-size:clamp(14px,5.4vw,22px)}.burst.streakb{font-size:clamp(16px,6.2vw,26px)}}
+.c-streak.hot{animation:hot .35s steps(2) infinite;background:#ff5a1f}
+@keyframes hot{50%{filter:brightness(1.35);transform:scale(1.12)}}
+.card.wobble{animation:wobble .42s cubic-bezier(.3,.7,.4,1)}
+body:not(.solo) .card.active.wobble{animation:wobbleUp .42s cubic-bezier(.3,.7,.4,1)}
+@keyframes wobble{20%{translate:-6px 0}45%{translate:5px 0}70%{translate:-3px 0}100%{translate:0 0}}
+@keyframes wobbleUp{20%{translate:-6px 0}45%{translate:5px 0}70%{translate:-3px 0}100%{translate:0 0}}
+.c-ans .pbtn.right{animation:rightGlow .5s ease-out}
+@keyframes rightGlow{0%{transform:scale(1.08);box-shadow:inset calc(-1*var(--u)) calc(-1.5*var(--u)) 0 rgba(0,0,0,.32),inset var(--u) var(--u) 0 rgba(255,255,255,.3),0 0 0 6px #b8ffd6}100%{transform:scale(1)}}
+.c-ans .hop .pips i.in{animation:pipIn .22s cubic-bezier(.3,1.7,.5,1) both}
+@keyframes pipIn{0%{transform:scale(0)}100%{transform:scale(1)}}
+.c-bar.plus{animation:plus .7s ease-out}
+@keyframes plus{0%{box-shadow:0 0 0 3px #7af8ff,0 0 22px #7af8ff}100%{box-shadow:none}}
+.c-row,.c-coins{display:inline-block}
+.tag.edge{font-size:clamp(8px,1.2vh,12px)}
+.tag.edge::before{content:"\25B2 ";}
+.tag.edge::after{content:" " attr(data-ahead);position:static;width:auto;height:auto;background:none;clip-path:none;transform:none;animation:none}
+/* the results: the cards bounce in one after the other */
+#final:not([hidden]) .rk{animation:rkIn .42s cubic-bezier(.3,1.5,.5,1) both}
+#final .rk:nth-child(2){animation-delay:.08s}#final .rk:nth-child(3){animation-delay:.16s}#final .rk:nth-child(4){animation-delay:.24s}
+#final:not([hidden]) h2{animation:rkIn .5s cubic-bezier(.3,1.6,.5,1) both}
+@keyframes rkIn{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion:reduce){#speed.on{animation:none}.card.wobble{animation:none}}
+</style>
+</head>
+<body>
+<canvas id="world"></canvas>
+<div id="speed"></div>
+<div id="tags"></div>
+
+<section id="lobby">
+  <button class="pbtn dark solo-only" id="leaveBtn" aria-label="Back to Fugio">&#9664; LEAVE</button>
+  <div id="profile" class="px solo-only" aria-label="Your racer"></div>
+  <div class="lb-title">
+    <h1>HOP <span>RUSH</span></h1>
+    <p class="cls-only">The ice-cream van is at the end of the road. Fill the gap to hop forward: the faster you answer, the more time you have to cross. First one there wins!</p>
+    <p class="solo-only">Beat three rivals to the ice-cream van. Answer fast for more time to hop!</p>
+  </div>
+  <div class="lb-panel px">
+    <div class="lb-top cls-only">
+      <span class="lab">PLAYERS</span>
+      <div class="seg" id="nSeg"><button class="pbtn" data-n="2">2</button><button class="pbtn" data-n="3">3</button><button class="pbtn" data-n="4">4</button></div>
+      <span class="lab" style="margin-left:auto">TAP A PICTURE TO CHANGE CHARACTER</span>
+    </div>
+    <div class="slots" id="slots"></div>
+    <div class="lb-set">
+      <button class="qcard px" id="qcard" aria-label="Choose the questions"></button>
+      <div class="opt px solo-only riv"><span class="lab">RIVALS</span><div class="seg" id="rivSeg"><button class="pbtn" data-r="easy">EASY</button><button class="pbtn" data-r="normal">NORMAL</button><button class="pbtn" data-r="hard">HARD</button></div></div>
+      <div class="opt px"><span class="lab">RACE LENGTH</span><div class="seg" id="lenSeg"><button class="pbtn" data-len="short">SHORT</button><button class="pbtn" data-len="medium">MEDIUM</button><button class="pbtn" data-len="long">LONG</button></div></div>
+      <div class="opt px"><span class="lab">TIME TO ANSWER</span><div class="stepper"><button class="pbtn" id="tMinus" aria-label="Less time">&minus;</button><b id="tVal">10s</b><button class="pbtn" id="tPlus" aria-label="More time">+</button></div></div>
+    </div>
+    <div class="lb-go">
+      <div class="lb-how"><span><b>1</b>Pick the right word</span><span><b>2</b>Answer fast = more time to hop</span><span><b>3</b>Watch out for cars and trains!</span></div>
+      <button class="pbtn yellow" id="startBtn">START RACE &#9654;</button>
+    </div>
+  </div>
+</section>
+
+<div id="hud" hidden>
+  <button class="pbtn dark" id="menuBtn">&#9776; MENU</button>
+  <div id="track" class="px"><div class="road"></div><div class="flag"></div></div>
+  <button class="pbtn dark" id="muteBtn" aria-label="Sound on or off"></button>
+</div>
+<div id="cards" hidden></div>
+<div id="big"></div>
+<div id="flash"></div>
+
+<section id="final" hidden>
+  <div class="fin-top"><h2 class="ptitle">FINISH!</h2><div class="win px" id="winBox"></div></div>
+  <div class="fin-bot"><div class="ranks" id="ranks"></div>
+  <div class="fin-btns">
+    <button class="pbtn dark" id="reviewBtn">REVIEW ANSWERS</button>
+    <button class="pbtn yellow" id="againBtn">RACE AGAIN</button>
+    <button class="pbtn pink" id="lobbyBtn">MENU</button>
+  </div></div>
+</section>
+
+<div id="ov" hidden></div>
+
+<script src="packages.js?v=1"></script>
+<script src="/shared/pack-picker.js?v=7"></script>
+<script type="module" src="game.js?v=15"></script>
+</body>
+</html>
