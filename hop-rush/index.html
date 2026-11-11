@@ -408,6 +408,77 @@ body:not(.solo) .card.active.wobble{animation:wobbleUp .42s cubic-bezier(.3,.7,.
 @keyframes rkIn{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
 @media (prefers-reduced-motion:reduce){#speed.on{animation:none}.card.wobble{animation:none}}
 </style>
+<style>
+/* ---------- (v16, the user) the student (solo) lobby looks like a game lobby: the world fills the screen with your racer
+   standing in the middle; LEAVE top left; your PROFILE top right (tap it to change your racer, your name, see your level,
+   coins and the shop); SHOP and RACE (settings) buttons on the left; at the bottom a dock with the questions and START */
+body.solo #profile{display:none!important}
+body.solo #lobby{display:block;padding:0;overflow:visible;pointer-events:none}
+body.solo #lobby > *{pointer-events:auto}
+body.solo #leaveBtn{position:fixed;z-index:6;top:max(12px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));padding:12px 14px;font-size:12px}
+#pfBtn{position:fixed;z-index:6;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));display:none;align-items:center;gap:8px;padding:6px 10px 6px 6px;max-width:min(240px,calc(100vw - 150px));text-align:left}
+#pfBtn .av{flex:none;width:46px;height:46px;border:3px solid var(--ink);background:radial-gradient(circle at 50% 60%,color-mix(in srgb,var(--ring) 55%,#fff) 0%,var(--ring) 70%);display:grid;place-items:center;overflow:hidden}
+#pfBtn .av img{width:100%;height:100%;image-rendering:pixelated;object-fit:cover}
+#pfBtn .nm{display:flex;flex-direction:column;gap:5px;min-width:0}
+#pfBtn .nm b{font:600 16px/1 var(--pf);color:#fff;text-shadow:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pfBtn .nm span{display:flex;align-items:center;gap:6px;font-size:9px;white-space:nowrap}
+#pfBtn .nm em{font-style:normal;color:var(--ink);background:var(--hi);padding:3px 4px 2px;text-shadow:none}
+#pfBtn .nm i.gc{margin-right:2px}
+#pfBtn .nm .cn{color:var(--hi)}
+#pfBtn .ed{flex:none;font-size:9px;color:var(--sky);margin-left:2px}
+.lb-side{position:fixed;z-index:6;left:max(12px,env(safe-area-inset-left));top:calc(max(12px,env(safe-area-inset-top)) + 64px);display:none;flex-direction:column;gap:10px}
+.pbtn.side{width:66px;padding:9px 0 7px;display:flex;flex-direction:column;align-items:center;gap:7px;font-size:9px;--c:var(--panel2)}
+.pbtn.side .gc{width:22px;height:22px;margin:0;border-width:3px}
+.pbtn.side .flag{display:block;width:22px;height:22px;background:conic-gradient(#fff 0 25%,var(--ink) 0 50%,#fff 0 75%,var(--ink) 0) 0 0/11px 11px;border:3px solid var(--ink);box-shadow:inset 0 0 0 1px #fff}
+body.solo #pfBtn,body.solo .lb-side{display:flex!important}
+/* the bottom dock: the questions and START */
+body.solo .lb-panel{position:fixed;z-index:5;left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));margin:0;width:min(520px,calc(100vw - 24px));padding:8px;gap:8px}
+body.solo .lb-set{display:block}
+body.solo .lb-go{display:block}
+body.solo #startBtn{padding:18px;font-size:18px;animation:goPulse 1.6s ease-in-out infinite}
+@keyframes goPulse{0%,100%{transform:none}50%{transform:scale(1.025)}}
+body.solo .lb-panel .opt{display:none!important}
+/* the sheets (profile, race settings) slide up from the bottom */
+.sheet{position:fixed;inset:0;z-index:40;display:none;align-items:flex-end;justify-content:center;background:rgba(13,16,48,.55);padding:12px 12px max(12px,env(safe-area-inset-bottom))}
+.sheet.open{display:flex}
+.sheet-card{width:min(480px,100%);max-height:92vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:12px;animation:sheetUp .28s cubic-bezier(.2,1.2,.4,1)}
+@keyframes sheetUp{from{transform:translateY(40%);opacity:0}to{transform:none;opacity:1}}
+.sh-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sh-head h3{margin:0;font-size:16px;font-weight:400}
+.sh-x{padding:9px 11px;font-size:12px}
+.sh-done{padding:15px;font-size:15px}
+/* the profile sheet: a big racer with arrows, the name, the level and coins with the shop */
+#pfBody .slot{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:12px 10px;background:var(--panel2)}
+#pfBody .slot .who{display:flex;flex-direction:column;align-items:center;gap:10px}
+#pfBody .slot .pic{width:min(42vw,190px)}
+#pfBody .slot .tagp{font-size:11px;padding:5px 8px}
+#pfBody .slot input{font-size:20px;padding:8px 6px}
+#pfBody .slot .arr{padding:24px 12px;font-size:16px}
+#pfBody .pf-bar{margin-top:8px;padding:8px}
+#pfBody .pf-lv,#pfBody .pf-coins,#pfBody .pf-shop{font-size:11px}
+#pfBody .pf-shop{padding:10px 12px}
+#setBody{display:flex;flex-direction:column;gap:8px}
+#setBody .opt{display:flex!important;flex-direction:row;align-items:center;gap:8px;padding:8px 10px}
+#setBody .opt .lab{flex:0 0 74px;text-align:left;font-size:9px}
+#setBody .seg{width:100%}
+#setBody .seg button{flex:1;min-width:0;padding:13px 2px;font-size:10px}
+#setBody .stepper{flex:1;justify-content:space-between}
+#setBody .stepper .pbtn{padding:11px 14px;font-size:15px}
+#setBody .stepper b{font-size:15px}
+.race-sum{display:block;margin-top:7px;font-size:9px;color:var(--ink);opacity:.75;letter-spacing:0;text-shadow:none}
+@media (min-aspect-ratio:1/1){
+  body.solo .lb-panel{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch;width:min(820px,calc(100vw - 24px))}
+  body.solo .lb-go{display:flex}
+  body.solo #startBtn{padding:14px 26px;white-space:nowrap}
+}
+@media (max-height:500px){
+  .lb-side{flex-direction:row;top:auto;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 84px)}
+  #pfBtn .av{width:36px;height:36px}
+  body.solo #startBtn{padding:12px 20px;font-size:15px}
+  #pfBody .slot .pic{width:110px}
+  .sheet-card{max-height:96vh;gap:6px;padding:8px}
+}
+</style>
 </head>
 <body>
 <canvas id="world"></canvas>
@@ -417,6 +488,10 @@ body:not(.solo) .card.active.wobble{animation:wobbleUp .42s cubic-bezier(.3,.7,.
 <section id="lobby">
   <button class="pbtn dark solo-only" id="leaveBtn" aria-label="Back to Fugio">&#9664; LEAVE</button>
   <div id="profile" class="px solo-only" aria-label="Your racer"></div>
+  <button class="pbtn dark solo-only" id="pfBtn" aria-label="Your profile: change your racer"></button>
+  <div class="lb-side solo-only"><button class="pbtn side" id="shopBtn" aria-label="Shop"><i class="gc"></i><span>SHOP</span></button><button class="pbtn side" id="raceBtn" aria-label="Race settings"><b class="flag"></b><span>RACE</span></button></div>
+  <div class="sheet" id="pfSheet" role="dialog" aria-label="Your racer"><div class="px sheet-card"><div class="sh-head"><h3 class="ptitle">YOUR RACER</h3><button class="pbtn dark sh-x" data-close aria-label="Close">&#10005;</button></div><div id="pfBody"></div><button class="pbtn yellow sh-done" data-close>DONE</button></div></div>
+  <div class="sheet" id="setSheet" role="dialog" aria-label="Race settings"><div class="px sheet-card"><div class="sh-head"><h3 class="ptitle">RACE SETTINGS</h3><button class="pbtn dark sh-x" data-close aria-label="Close">&#10005;</button></div><div id="setBody"></div><button class="pbtn yellow sh-done" data-close>DONE</button></div></div>
   <div class="lb-title">
     <h1>HOP <span>RUSH</span></h1>
     <p class="cls-only">The ice-cream van is at the end of the road. Fill the gap to hop forward: the faster you answer, the more time you have to cross. First one there wins!</p>
@@ -465,6 +540,6 @@ body:not(.solo) .card.active.wobble{animation:wobbleUp .42s cubic-bezier(.3,.7,.
 
 <script src="packages.js?v=1"></script>
 <script src="/shared/pack-picker.js?v=7"></script>
-<script type="module" src="game.js?v=15"></script>
+<script type="module" src="game.js?v=16"></script>
 </body>
 </html>

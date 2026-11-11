@@ -233,8 +233,10 @@ let FOCUS = .5; // where the followed character sits, from the top of the screen
 let lobbyView = true, VIEW_W = 0, FOCUS_ICON = 0;
 function fitView() {
   renderer.setSize(innerWidth, innerHeight, false);
-  const a = innerWidth / innerHeight, vw = VIEW_W || (SOLO && a < 1 ? 8.8 : a < 1.2 ? 10.5 : a < 1.5 ? 13 : 15.5) * (lobbyView ? (SOLO && a < 1 ? 1.1 : 1.25) : 1), fh = vw / a;
-  FOCUS = FOCUS_ICON || (lobbyView ? (SOLO && a >= 1 ? .5 : .32) : .5);   // (v13: solo sideways, the settings are a side column, so the racer sits mid-height)
+  const a = innerWidth / innerHeight, soloLobby = SOLO && lobbyView && !VIEW_W;
+  // (v16) the solo lobby: a close-up of your racer in the world (a game lobby), the dock below
+  const vw = soloLobby ? (a < 1 ? 4.6 : a < 1.5 ? 8 : 9.5) : VIEW_W || (SOLO && a < 1 ? 8.8 : a < 1.2 ? 10.5 : a < 1.5 ? 13 : 15.5) * (lobbyView ? (SOLO && a < 1 ? 1.1 : 1.25) : 1), fh = vw / a;
+  FOCUS = FOCUS_ICON || (soloLobby ? (a < 1 ? .54 : .5) : lobbyView ? (SOLO && a >= 1 ? .5 : .32) : .5);   // (v13: solo sideways, the settings are a side column, so the racer sits mid-height)
   cam.left = -vw / 2; cam.right = vw / 2; cam.top = fh * FOCUS; cam.bottom = -fh * (1 - FOCUS); cam.updateProjectionMatrix();
 }
 addEventListener('resize', () => { fitView(); if (SOLO && lobbyView && !$('lobby').hidden && lobbyChars.length) placeLobbyChars(); });
@@ -912,7 +914,19 @@ const saveSetup = () => store.set(SETUP_KEY, setup);
 const RIVALS = {easy: {think: [5.8, 9], acc: .65, careless: .12, rest: [.8, 1.5]}, normal: {think: [4, 6.2], acc: .78, careless: .06, rest: [.6, 1.2]}, hard: {think: [2.6, 4.2], acc: .88, rest: [.4, .8], careless: .025}};
 let lobbyChars = [];
 // (v13) solo: your racer and name sit in the top-right corner (#profile); the class lobby keeps its row of slots
-const SLOTS = SOLO ? $('profile') : $('slots');
+// (v16) solo: the racer, name, level and shop live in the profile sheet (opened by the profile button top right)
+const SLOTS = SOLO ? $('pfBody') : $('slots');
+const openSheet = (id) => { $(id).classList.add('open'); if (id === 'pfSheet') mountPV($(id)); };
+const closeSheets = () => document.querySelectorAll('.sheet.open').forEach((s) => s.classList.remove('open'));
+if (SOLO) {
+  // the race settings move into their own sheet
+  for (const id of ['rivSeg', 'lenSeg', 'tMinus']) { const o = $(id)?.closest('.opt'); if (o) $('setBody').appendChild(o); }
+  $('pfBtn').onclick = () => { sfx.hop(); openSheet('pfSheet'); };
+  $('raceBtn').onclick = () => { sfx.hop(); openSheet('setSheet'); };
+  $('shopBtn').onclick = () => { sfx.hop(); openShop(); };
+  document.querySelectorAll('.sheet').forEach((s) => s.addEventListener('click', (e) => { if (e.target === s || e.target.closest('[data-close]')) { sfx.hop(); closeSheets(); renderLobby(); } }));
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheets(); });
+}
 // LEAVE: back to the Fugio library (the player closes), or to fugio.co when the game is open on its own
 $('leaveBtn').onclick = () => { sfx.hop(); if (window.parent !== window) window.parent.postMessage({fugio: 'leave'}, '*'); else location.href = 'https://www.fugio.co/'; };
 function renderLobby() {
@@ -930,6 +944,14 @@ function renderLobby() {
   }).join('');
   // (v14) solo: your level, your coins and the SHOP under your racer
   if (SOLO) sl.insertAdjacentHTML('beforeend', `<div class="pf-bar"><span class="pf-lv">LV ${myLevel()}</span><span class="pf-lvbar"><i style="width:${((myLevel() - 1) / (MAX_LEVEL - 1) * 100).toFixed(1)}%"></i></span><span class="pf-coins"><i class="gc"></i>${purse()}</span><button class="pbtn yellow pf-shop">SHOP</button></div>`);
+  // (v16) solo: the profile button (your racer's picture, your name, level and coins) and the race summary
+  if (SOLO) {
+    const c = crewOf(setup.chars[0]);
+    $('pfBtn').style.setProperty('--ring', c.ring);
+    $('pfBtn').innerHTML = `<span class="av"><img src="${PORTRAIT[c.id]}" alt=""></span><span class="nm"><b>${esc(setup.names[0] || c.name)}</b><span><em>LV ${myLevel()}</em><i class="gc"></i><span class="cn">${purse()}</span></span></span><span class="ed">&#9998;</span>`;
+    $('raceBtn').innerHTML = `<b class="flag"></b><span>RACE</span>`;
+    $('startBtn').innerHTML = `START RACE &#9654;<small class="race-sum">${(setup.rivals || 'normal').toUpperCase()} RIVALS · ${setup.len.toUpperCase()} · ${setup.time}s</small>`;
+  }
   const sum = window.FugioPacks ? FugioPacks.summary(PACKS, packIds) : {title: 'Questions', sub: '', level: '–'};
   const LVC = {A0: '#5ee08a', A1: '#4fb4ff', A2: '#b57bff'};
   $('qcard').innerHTML = `<span class="lv" style="--c:${LVC[sum.level] || '#ffb357'}">${esc(sum.level)}</span>
@@ -941,7 +963,7 @@ function placeLobbyChars() {
   lobbyChars.forEach((c) => world.remove(c.root));
   const xs = laneXs(setup.n), a = innerWidth / innerHeight;
   // (v13) solo on a wide screen: the settings column is on the right, so your racer stands left of the middle
-  if (SOLO && a >= 1) xs[0] = -(a < 1.2 ? 10.5 : a < 1.5 ? 13 : 15.5) * 1.25 * .2;
+  if (SOLO) xs[0] = 0;   // (v16) your racer stands in the middle of the lobby
   lobbyChars = Array.from({length: setup.n}, (_, i) => makeChar(crewOf(setup.chars[i]), xs[i]));
 }
 function cycleChar(i, d) {
@@ -975,7 +997,7 @@ $('qcard').onclick = async () => {
   const ids = await FugioPacks.open(PACKS, packIds, {theme: 'pixel', kicker: 'PICK YOUR QUESTIONS'});
   if (ids && ids.length) { packIds = ids; store.set('packs', ids); renderLobby(); }
 };
-$('startBtn').onclick = () => startRace();
+$('startBtn').onclick = () => { closeSheets(); startRace(); };
 
 // ---------- the race
 let G = null;
