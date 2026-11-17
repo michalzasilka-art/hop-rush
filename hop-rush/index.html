@@ -478,6 +478,41 @@ body.solo .lb-panel .opt{display:none!important}
   #pfBody .slot .pic{width:110px}
   .sheet-card{max-height:96vh;gap:6px;padding:8px}
 }
+
+/* ---------- (v17, 2026-11-17, the user: "make the menu visually appealing, everything symmetrical, only the important
+   things displayed") the solo lobby on one centre line: two equal square buttons in the top corners (◀ back, ⚙ race
+   settings), the HOP RUSH logo in the middle, your racer standing in the world under it, and at the bottom two equal
+   mirrored tiles (WORDS left, YOUR RACER right) over one big START. On a wide screen: WORDS · START · RACER in one row. */
+body.solo .lb-panel,body.solo .lb-side,body.solo #shopBtn{display:none!important}
+body.solo .lb-title{display:block!important;position:fixed;z-index:4;left:0;right:0;top:calc(max(14px,env(safe-area-inset-top)) + 74px);padding:0;text-align:center;pointer-events:none}
+body.solo .lb-title p{display:none!important}
+body.solo .lb-title h1{font-size:clamp(36px,12.5vw,88px);line-height:1;text-shadow:0 calc(var(--u)*1.6) 0 var(--ink),calc(var(--u)*1.2) 0 0 var(--ink),calc(var(--u)*-1.2) 0 0 var(--ink),0 calc(var(--u)*-1.2) 0 var(--ink),0 calc(var(--u)*3) 0 rgba(13,16,48,.35)}
+body.solo .lb-title h1 span{display:inline-block}
+body.solo #leaveBtn,body.solo #raceBtn{position:fixed;z-index:6;top:max(14px,env(safe-area-inset-top));width:58px;height:58px;padding:0;display:grid!important;place-items:center;--c:var(--deep)}
+body.solo #leaveBtn{left:max(14px,env(safe-area-inset-left))}
+body.solo #raceBtn{right:max(14px,env(safe-area-inset-right))}
+body.solo #leaveBtn svg,body.solo #raceBtn svg{width:26px;height:26px;display:block}
+.dock{display:none}
+body.solo .dock{position:fixed;z-index:5;left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));width:min(520px,calc(100vw - 28px));display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"w r" "s s";gap:10px}
+body.solo .dock #qcard{grid-area:w} body.solo .dock #pfBtn{grid-area:r} body.solo .dock #startBtn{grid-area:s}
+body.solo .dock .tile{position:static;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:7px;max-width:none;width:auto;min-width:0;height:118px;padding:10px 8px;text-align:center;cursor:pointer;--c:var(--panel2);background:var(--c)}
+body.solo .dock .tile .ic{flex:none;display:grid;place-items:center;width:46px;height:46px;border:3px solid var(--ink);font-family:var(--px);font-size:12px;color:var(--ink);background:var(--icbg,#5ee08a);overflow:hidden}
+body.solo .dock .tile .ic img{width:100%;height:100%;object-fit:cover;image-rendering:pixelated}
+body.solo .dock .tile .k{font-family:var(--px);font-size:9px;color:var(--hi);letter-spacing:.06em;text-shadow:none}
+body.solo .dock .tile b{max-width:100%;font:700 16px/1.1 var(--pf);color:#fff;text-shadow:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.solo .dock #startBtn{width:100%;padding:20px 10px;font-size:19px;animation:goPulse 1.6s ease-in-out infinite}
+body.solo .dock #pfBtn,body.solo .dock #qcard{position:static;top:auto;right:auto;left:auto;max-width:none;width:auto;min-width:0;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:7px;height:118px;padding:10px 8px;margin:0}
+body.solo .c-msg .hops.big{font-size:.72em;margin-top:1vh}
+@media (min-aspect-ratio:1/1){
+  body.solo .dock{width:min(860px,calc(100vw - 28px));grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) minmax(0,1fr);grid-template-areas:"w s r"}
+  body.solo .dock #startBtn{height:118px;font-size:22px}
+  body.solo .lb-title{top:calc(max(14px,env(safe-area-inset-top)) + 4px)}
+}
+@media (max-height:520px){
+  body.solo .dock .tile{height:88px;gap:4px;padding:6px} body.solo .dock .tile .ic{width:34px;height:34px}
+  body.solo .dock #startBtn{height:88px;font-size:18px} body.solo .lb-title h1{font-size:clamp(28px,8vh,48px)}
+}
 </style>
 </head>
 <body>
@@ -492,6 +527,7 @@ body.solo .lb-panel .opt{display:none!important}
   <div class="lb-side solo-only"><button class="pbtn side" id="shopBtn" aria-label="Shop"><i class="gc"></i><span>SHOP</span></button><button class="pbtn side" id="raceBtn" aria-label="Race settings"><b class="flag"></b><span>RACE</span></button></div>
   <div class="sheet" id="pfSheet" role="dialog" aria-label="Your racer"><div class="px sheet-card"><div class="sh-head"><h3 class="ptitle">YOUR RACER</h3><button class="pbtn dark sh-x" data-close aria-label="Close">&#10005;</button></div><div id="pfBody"></div><button class="pbtn yellow sh-done" data-close>DONE</button></div></div>
   <div class="sheet" id="setSheet" role="dialog" aria-label="Race settings"><div class="px sheet-card"><div class="sh-head"><h3 class="ptitle">RACE SETTINGS</h3><button class="pbtn dark sh-x" data-close aria-label="Close">&#10005;</button></div><div id="setBody"></div><button class="pbtn yellow sh-done" data-close>DONE</button></div></div>
+  <div class="dock" id="dock"></div>
   <div class="lb-title">
     <h1>HOP <span>RUSH</span></h1>
     <p class="cls-only">The ice-cream van is at the end of the road. Fill the gap to hop forward: the faster you answer, the more time you have to cross. First one there wins!</p>
@@ -540,6 +576,6 @@ body.solo .lb-panel .opt{display:none!important}
 
 <script src="packages.js?v=1"></script>
 <script src="/shared/pack-picker.js?v=7"></script>
-<script type="module" src="game.js?v=16"></script>
+<script type="module" src="game.js?v=17"></script>
 </body>
 </html>

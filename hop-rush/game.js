@@ -193,7 +193,8 @@ function boxesGeo(list, u = 1, ao = u === 1) {
     const g = new THREE.BoxGeometry(w * u, h * u, d * u); g.translate(x * u, (y + h / 2) * u, z * u);
     const p = g.attributes.position.array, n = g.attributes.normal.array, base = pos.length / 3, bot = y * u + 1e-4, dk = ao && h * u > .2;
     _c.set(hex);
-    for (let i = 0; i < p.length; i += 3) { const k = dk && p[i + 1] < bot ? .74 : 1; pos.push(p[i], p[i + 1], p[i + 2]); nor.push(n[i], n[i + 1], n[i + 2]); col.push(_c.r * k, _c.g * k, _c.b * k); }
+    const vb = ao && SOLO ? 1 + (Math.abs(Math.sin(x * 12.9898 + z * 78.233 + y * 37.719) * 43758.5453) % 1 - .5) * .09 : 1;   // (v17) ±4.5 % per block
+    for (let i = 0; i < p.length; i += 3) { const k = (dk && p[i + 1] < bot ? .74 : 1) * vb * (ao && SOLO && n[i + 1] > .5 ? 1.03 : 1); pos.push(p[i], p[i + 1], p[i + 2]); nor.push(n[i], n[i + 1], n[i + 2]); col.push(_c.r * k, _c.g * k, _c.b * k); }
     for (const i of g.index.array) idx.push(base + i);
     g.dispose();
   }
@@ -218,8 +219,9 @@ const scene = new THREE.Scene(); scene.background = new THREE.Color(HAZE);
 scene.fog = new THREE.Fog(HAZE, 20, 36); // far rows fade into a light-blue haze
 const MAT = new THREE.MeshLambertMaterial({vertexColors: true});
 // (v15) a warm sun and a cool sky fill, so the shadows read blue-ish and the lit sides warm
-scene.add(new THREE.HemisphereLight(0xe4efff, 0x5f6aa6, 1.55));
-const sun = new THREE.DirectionalLight(0xffe6c2, 2.3);
+// (v17, solo) a violet ground light (lilac shadows) and a warmer, lower sun (longer soft shadows); the class race keeps v16's light
+scene.add(SOLO ? new THREE.HemisphereLight(0xe8f0ff, 0x6a5fa8, 1.5) : new THREE.HemisphereLight(0xe4efff, 0x5f6aa6, 1.55));
+const sun = SOLO ? new THREE.DirectionalLight(0xffdcb0, 2.45) : new THREE.DirectionalLight(0xffe6c2, 2.3);
 // a weak phone (few cores / little memory) starts with a smaller shadow map; autoQuality can lower it later too
 const WEAK = (navigator.deviceMemory > 0 && navigator.deviceMemory <= 3) || (matchMedia('(pointer:coarse)').matches && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4);
 sun.castShadow = true; sun.shadow.mapSize.set(WEAK ? 1024 : 2048, WEAK ? 1024 : 2048); sun.shadow.radius = 3;
@@ -227,6 +229,50 @@ Object.assign(sun.shadow.camera, {left: -16, right: 16, top: 16, bottom: -16, ne
 sun.shadow.bias = -.0015;
 scene.add(sun, sun.target);
 const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 200);
+// ---------- (v17) the look: ONE full-screen pass after the scene (the fugio low-poly recipe, vault "Low Poly Look Research"):
+// ambient occlusion from the depth (soft dark creases at the foot of cars, trees, racers), a tilt-shift blur towards the
+// top and the bottom of the screen (the "miniature" look of ISLANDERS), a pastel grade (lilac shadows, warm highlights)
+// and a light vignette. A slow device turns it off before it lowers the resolution; ?post=0 turns it off.
+const POST = (() => {
+  const P = {on: SOLO && QS.get('post') !== '0', rt: null, mat: null, sc: null, cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), sz: new THREE.Vector2()};
+  function init(w, h) {
+    const dt = new THREE.DepthTexture(w, h); dt.type = THREE.UnsignedIntType;
+    P.rt = new THREE.WebGLRenderTarget(w, h, {type: THREE.HalfFloatType, samples: 4, depthTexture: dt, depthBuffer: true});
+    P.mat = new THREE.ShaderMaterial({depthTest: false, depthWrite: false,
+      uniforms: {tC: {value: P.rt.texture}, tD: {value: dt}, uRes: {value: new THREE.Vector2(w, h)}, uNear: {value: .1}, uFar: {value: 200}, uFocus: {value: .5}, uPx: {value: 1}, uAOR: {value: 8}, uTilt: {value: 1}},
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: `uniform sampler2D tC, tD; uniform vec2 uRes; uniform float uNear, uFar, uFocus, uPx, uAOR, uTilt; varying vec2 vUv;
+        float lin(vec2 uv) { return uNear + texture2D(tD, uv).x * (uFar - uNear); }
+        void main() {
+          vec2 px = 1.0 / uRes; vec3 c = texture2D(tC, vUv).rgb; float d = lin(vUv);
+          float off = vUv.y - uFocus, bl = uTilt * (smoothstep(.17, .5, off) + .5 * smoothstep(.24, .6, -off));
+          if (bl > .01) { vec3 acc = c; float r = 3.4 * uPx * bl;
+            for (int i = 0; i < 12; i++) { float a = float(i) * .5236 + (i < 6 ? .26 : 0.0); acc += texture2D(tC, vUv + vec2(cos(a), sin(a)) * px * r * (i < 6 ? .5 : 1.0)).rgb; }
+            c = mix(c, acc / 13.0, clamp(bl, 0.0, 1.0)); }
+          float occ = 0.0;
+          for (int i = 0; i < 10; i++) { float a = float(i) * 2.399963 + .5; float rr = uAOR * (.35 + .65 * fract(float(i) * .618)); float dd = lin(vUv + vec2(cos(a), sin(a)) * rr * px);
+            float diff = d - dd; occ += smoothstep(.04, .4, diff) * (1.0 - smoothstep(1.0, 2.8, diff)); }
+          occ = clamp(occ / 10.0, 0.0, 1.0); c *= mix(vec3(1.0), vec3(.64, .63, .82), occ * .7);
+          float L = dot(c, vec3(.299, .587, .114));
+          c = mix(vec3(L), c, 1.05);
+          c += vec3(.012, .008, .03) * (1.0 - smoothstep(0.0, .4, L));
+          c *= mix(vec3(1.0), vec3(1.03, 1.012, .965), smoothstep(.35, 1.0, L));
+          vec2 q = vUv - .5; c *= 1.0 - dot(q, q) * .26;
+          gl_FragColor = vec4(c, 1.0);
+          #include <colorspace_fragment>
+        }`});
+    const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), P.mat); q.frustumCulled = false; P.sc = new THREE.Scene(); P.sc.add(q);
+  }
+  P.draw = () => {
+    if (!P.on) { renderer.render(scene, cam); P.calls = renderer.info.render.calls; P.tris = renderer.info.render.triangles; return; }
+    renderer.getDrawingBufferSize(P.sz); const w = Math.max(1, P.sz.x | 0), h = Math.max(1, P.sz.y | 0);
+    if (!P.rt) init(w, h); else if (P.rt.width !== w || P.rt.height !== h) { P.rt.setSize(w, h); P.mat.uniforms.uRes.value.set(w, h); }
+    const U = P.mat.uniforms; U.uNear.value = cam.near; U.uFar.value = cam.far; U.uFocus.value = 1 - FOCUS; U.uPx.value = renderer.getPixelRatio();
+    U.uAOR.value = clamp(.2 * h / Math.max(1, cam.top - cam.bottom), 4, 26); U.uTilt.value = ICON ? 0 : 1;   // (AO reach ≈ .2 of a road tile)
+    renderer.setRenderTarget(P.rt); renderer.render(scene, cam); P.calls = renderer.info.render.calls; P.tris = renderer.info.render.triangles; renderer.setRenderTarget(null); renderer.render(P.sc, P.cam);
+  };
+  return P;
+})();
 const CAM_OFF = new THREE.Vector3(2.4, 8.5, 10);
 const camAt = new THREE.Vector3(0, 0, 0), camGoal = new THREE.Vector3(0, 0, 0);
 let FOCUS = .5; // where the followed character sits, from the top of the screen (the cards cover the bottom 40%)
@@ -235,7 +281,7 @@ function fitView() {
   renderer.setSize(innerWidth, innerHeight, false);
   const a = innerWidth / innerHeight, soloLobby = SOLO && lobbyView && !VIEW_W;
   // (v16) the solo lobby: a close-up of your racer in the world (a game lobby), the dock below
-  const vw = soloLobby ? (a < 1 ? 4.6 : a < 1.5 ? 8 : 9.5) : VIEW_W || (SOLO && a < 1 ? 8.8 : a < 1.2 ? 10.5 : a < 1.5 ? 13 : 15.5) * (lobbyView ? (SOLO && a < 1 ? 1.1 : 1.25) : 1), fh = vw / a;
+  const vw = soloLobby ? (a < 1 ? 3.7 : a < 1.5 ? 7.2 : 8.6) : VIEW_W || (SOLO && a < 1 ? 8.8 : a < 1.2 ? 10.5 : a < 1.5 ? 13 : 15.5) * (lobbyView ? (SOLO && a < 1 ? 1.1 : 1.25) : 1), fh = vw / a;
   FOCUS = FOCUS_ICON || (soloLobby ? (a < 1 ? .54 : .5) : lobbyView ? (SOLO && a >= 1 ? .5 : .32) : .5);   // (v13: solo sideways, the settings are a side column, so the racer sits mid-height)
   cam.left = -vw / 2; cam.right = vw / 2; cam.top = fh * FOCUS; cam.bottom = -fh * (1 - FOCUS); cam.updateProjectionMatrix();
 }
@@ -276,6 +322,19 @@ const trainGeo = (loco) => loco
     [.8, 1.15, 0, .3, .5, .3, '#30323d'], [1.41, .3, 0, .04, .25, .4, '#fff6b0'], [0, .25, 0, 2.82, .12, .94, '#30323d'], ...WHEELS([-1, -.35, .35, 1], .45)])
   : boxesGeo([[0, .1, 0, 2.8, 1.05, .9, '#f4efe6'], [0, .38, 0, 2.82, .14, .92, '#3a7bd5'], [0, .7, 0, 2.6, .26, .92, '#9fd3ff'], [0, 1.15, 0, 2.7, .06, .8, '#d8d2c6'],
     ...WHEELS([-1, -.4, .4, 1], .45)]);
+// (v17, draw calls) several vertex-coloured geometries, each moved/turned, into one geometry (one draw instead of many)
+function mergeGeos(parts) {
+  const pos = [], nor = [], col = [], idx = []; const m4 = new THREE.Matrix4(), n3 = new THREE.Matrix3(), v = new THREE.Vector3();
+  for (const {geo, x, y = 0, z = 0, ry = 0} of parts) {
+    m4.makeRotationY(ry).setPosition(x, y, z); n3.getNormalMatrix(m4);
+    const P = geo.attributes.position, N = geo.attributes.normal, C = geo.attributes.color, base = pos.length / 3;
+    for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(m4); pos.push(v.x, v.y, v.z); v.fromBufferAttribute(N, i).applyMatrix3(n3); nor.push(v.x, v.y, v.z); col.push(C.getX(i), C.getY(i), C.getZ(i)); }
+    for (const i of geo.index.array) idx.push(base + i);
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); out.setIndex(idx);
+  return out;
+}
 const treeGeo = (k) => cached('tree' + k, () => k === 0
   ? boxesGeo([[0, 0, 0, .3, .45, .3, '#7a5230'], [0, .45, 0, .86, .7, .86, '#3fae49'], [0, 1.15, 0, .6, .38, .6, '#57c45a']])
   : k === 1 ? boxesGeo([[0, 0, 0, .3, .3, .3, '#7a5230'], [0, .3, 0, .8, .55, .8, '#3a9c43'], [0, .85, 0, .8, .55, .8, '#46b04e'], [0, 1.4, 0, .5, .4, .5, '#5cc55e']])
@@ -349,8 +408,15 @@ function buildWorld(len) {
       const dense = r < START || r > FINISH ? .32 : .2;
       for (let x = -13; x <= 13; x++) {
         if (busy(x) || (r >= START - 3 && r <= FINISH && Math.abs(x) < 4.5)) continue;
-        if (Math.random() < dense) { const k = Math.random() < .14 ? 2 : Math.random() < .5 ? 0 : 1; const m = new THREE.Mesh(treeGeo(k), MAT); m.position.set(x, 0, 0); m.rotation.y = randi(0, 3) * Math.PI / 2; m.userData.sway = k < 2; m.castShadow = m.receiveShadow = true; row.decor = row.decor || []; row.decor.push(m); }
+        if (Math.random() < dense) { const k = Math.random() < .14 ? 2 : Math.random() < .5 ? 0 : 1, ry = randi(0, 3) * Math.PI / 2;
+          if (Math.abs(x) >= 8) { (row.far = row.far || []).push({geo: treeGeo(k), x, ry}); continue; }   // (v17) never sways: merged
+          const m = new THREE.Mesh(treeGeo(k), MAT); m.position.set(x, 0, 0); m.rotation.y = ry; m.userData.sway = k < 2; m.castShadow = m.receiveShadow = true; row.decor = row.decor || []; row.decor.push(m); }
         else if (Math.random() < .08) list.push([x + rand(-.3, .3), 0, rand(-.3, .3), .14, .12, .14, pick1(['#fff36b', '#ff8ad8', '#ffffff'])]);
+      }
+      // (v17) tufts of grass and clumps of flowers in little clusters, never evenly (merged into the row's one mesh)
+      if (SOLO && row.type === 'grass') for (let k = 0; k < 6; k++) {
+        const cx = rand(-13, 13), cz = rand(-.3, .3), fl = k < 2, n = fl ? randi(3, 5) : randi(4, 7), tone = pick1(['#5fae36', '#93d957', '#78c346']), fc = pick1(['#fff36b', '#ff8ad8', '#ffffff', '#b98cff']);
+        for (let j = 0; j < n; j++) { const h = fl ? rand(.06, .09) : rand(.05, .11), w = fl ? .1 : rand(.09, .13); list.push([cx + rand(-.4, .4), 0, clamp(cz + rand(-.2, .2), -.42, .42), w, h, w, fl ? fc : tone]); }
       }
       if (r === START) list.push([0, 0, -.47, 15, .02, .08, '#ffffff']);
       if (row.type === 'finish') {
@@ -407,7 +473,7 @@ function buildWorld(len) {
       row.pads = [];
       for (let x = -12; x <= 12; x++) {
         if (Math.abs(x) > 3 && Math.random() < .55) continue; // a pad on every player's column, a few more around them
-        const m = new THREE.Mesh(padGeo, MAT); m.position.set(x, -.32, 0); m.rotation.y = randi(0, 3) * Math.PI / 2; m.receiveShadow = true;
+        const m = new THREE.Object3D(); m.position.set(x, -.32, 0); m.rotation.y = randi(0, 3) * Math.PI / 2;
         row.pads.push({x, m, off: rand(0, row.period)});
       }
     }
@@ -415,8 +481,12 @@ function buildWorld(len) {
     mesh.receiveShadow = true; mesh.castShadow = row.type === 'finish' || r === FINISH + 3;
     row.g = new THREE.Group(); row.g.position.z = -r; row.g.add(mesh);
     (row.decor || []).forEach((m) => row.g.add(m));
+    if (row.far) { const fm = new THREE.Mesh(mergeGeos(row.far), MAT); fm.userData.own = true; fm.castShadow = fm.receiveShadow = true; row.g.add(fm); row.far = null; }
+    if (row.pads) {   // (v17) all the lily pads of a river in one instanced mesh; each pad keeps a little transform of its own
+      row.padIM = new THREE.InstancedMesh(padGeo, MAT, row.pads.length); row.padIM.receiveShadow = true; row.padIM.frustumCulled = false; row.g.add(row.padIM);
+      row.pads.forEach((pd, i) => { pd.m.updateMatrix(); row.padIM.setMatrixAt(i, pd.m.matrix); });
+    }
     row.cars?.forEach((c) => row.g.add(c.m));
-    row.pads?.forEach((pd) => row.g.add(pd.m));
     if (row.train) row.g.add(row.train, ...row.lights);
     if (row.water) row.g.add(row.water, row.glint);
     world.add(row.g);
@@ -457,7 +527,9 @@ function updateRows(dt) {
         const s = padState(row, pd, T);
         pd.m.position.y = s === 'down' ? -.62 : -.32 + (s === 'warn' ? Math.sin(T * 30) * .025 : Math.sin(T * 2 + pd.x) * .012) - padDip(pd);
         pd.m.rotation.z = s === 'warn' ? Math.sin(T * 26) * .06 : 0;
+        pd.m.updateMatrix(); row.padIM.setMatrixAt(row.pads.indexOf(pd), pd.m.matrix);
       }
+      row.padIM.instanceMatrix.needsUpdate = true;
     }
   }
 }
@@ -918,7 +990,14 @@ let lobbyChars = [];
 const SLOTS = SOLO ? $('pfBody') : $('slots');
 const openSheet = (id) => { $(id).classList.add('open'); if (id === 'pfSheet') mountPV($(id)); };
 const closeSheets = () => document.querySelectorAll('.sheet.open').forEach((s) => s.classList.remove('open'));
+// (v17) pixel icons for the two corner squares of the symmetrical solo lobby
+const ICON_BACK = '<svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M8 1h2v2H8zM6 3h2v2H6zM4 5h2v2H4zM6 7h2v2H6zM8 9h2v2H8z"/></svg>';
+const ICON_GEAR = '<svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" fill-rule="evenodd"><path d="M5 0h2v2h1V1h2v2H9v1h3v4H9v1h1v2H8v-1H7v2H5v-2H4v1H2V9h1V8H0V4h3V3H2V1h2v1h1zM5 4v4h2V4z"/></svg>';
 if (SOLO) {
+  // (v17, the user: "symmetrical, only the important things") the bottom dock: WORDS | YOUR RACER, START under them
+  // (one row WORDS · START · RACER on a wide screen); ◀ and ⚙ are two equal squares in the top corners; the shop is in the racer sheet
+  $('dock').append($('qcard'), $('pfBtn'), $('startBtn')); $('qcard').classList.add('tile'); $('pfBtn').classList.add('tile');
+  $('lobby').append($('raceBtn')); $('leaveBtn').innerHTML = ICON_BACK; $('raceBtn').innerHTML = ICON_GEAR;
   // the race settings move into their own sheet
   for (const id of ['rivSeg', 'lenSeg', 'tMinus']) { const o = $(id)?.closest('.opt'); if (o) $('setBody').appendChild(o); }
   $('pfBtn').onclick = () => { sfx.hop(); openSheet('pfSheet'); };
@@ -948,13 +1027,13 @@ function renderLobby() {
   if (SOLO) {
     const c = crewOf(setup.chars[0]);
     $('pfBtn').style.setProperty('--ring', c.ring);
-    $('pfBtn').innerHTML = `<span class="av"><img src="${PORTRAIT[c.id]}" alt=""></span><span class="nm"><b>${esc(setup.names[0] || c.name)}</b><span><em>LV ${myLevel()}</em><i class="gc"></i><span class="cn">${purse()}</span></span></span><span class="ed">&#9998;</span>`;
-    $('raceBtn').innerHTML = `<b class="flag"></b><span>RACE</span>`;
-    $('startBtn').innerHTML = `START RACE &#9654;<small class="race-sum">${(setup.rivals || 'normal').toUpperCase()} RIVALS · ${setup.len.toUpperCase()} · ${setup.time}s</small>`;
+    $('pfBtn').innerHTML = `<span class="ic" style="--icbg:${c.ring}"><img src="${PORTRAIT[c.id]}" alt=""></span><span class="k">YOUR RACER</span><b>${esc(setup.names[0] || c.name)}</b>`;
+    $('startBtn').innerHTML = 'START &#9654;';
   }
   const sum = window.FugioPacks ? FugioPacks.summary(PACKS, packIds) : {title: 'Questions', sub: '', level: '–'};
   const LVC = {A0: '#5ee08a', A1: '#4fb4ff', A2: '#b57bff'};
-  $('qcard').innerHTML = `<span class="lv" style="--c:${LVC[sum.level] || '#ffb357'}">${esc(sum.level)}</span>
+  if (SOLO) $('qcard').innerHTML = `<span class="ic" style="--icbg:${LVC[sum.level] || '#ffb357'}">${esc(sum.level)}</span><span class="k">WORDS</span><b>${esc(sum.title)}</b>`;
+  else $('qcard').innerHTML = `<span class="lv" style="--c:${LVC[sum.level] || '#ffb357'}">${esc(sum.level)}</span>
     <span class="t"><span class="lab">QUESTIONS</span><b>${esc(sum.title)}</b><small>${esc(sum.sub)}</small></span><span class="go">CHANGE &#9654;</span>`;
   mountPV(sl);
   placeLobbyChars();
@@ -1230,7 +1309,8 @@ function startCross(n) {
   G.phase = 'hop'; G.cross = n; G.from = c.row; G.target = nextSafe(c.row);
   showGoal(c, G.target);
   const secs = G.hopTime || hopSecs(G.target - c.row, 0), fast = secs >= HOP_MAX(G.target - c.row) * .8;
-  card.querySelector('.c-msg').innerHTML = `<div><span class="ok">&#10003; ${esc(G.cur.words.right)}</span><span class="hops">${G.target - c.row} HOP${G.target - c.row > 1 ? 'S' : ''} TO THE SAFE LINE</span><span class="hops" style="color:${fast ? '#ffd23f' : '#c9cdf8'}">${fast ? 'FAST ANSWER: LOTS OF TIME!' : `${secs.toFixed(1)}s TO CROSS. GO!`}</span></div>`;
+  if (SOLO) card.querySelector('.c-msg').innerHTML = `<div><span class="ok">&#10003; ${esc(G.cur.words.right)}</span><span class="hops big">+${G.target - c.row} HOP${G.target - c.row > 1 ? 'S' : ''}${fast ? ' · FAST!' : ''}</span></div>`;   // (v17: short)
+  else card.querySelector('.c-msg').innerHTML = `<div><span class="ok">&#10003; ${esc(G.cur.words.right)}</span><span class="hops">${G.target - c.row} HOP${G.target - c.row > 1 ? 'S' : ''} TO THE SAFE LINE</span><span class="hops" style="color:${fast ? '#ffd23f' : '#c9cdf8'}">${fast ? 'FAST ANSWER: LOTS OF TIME!' : `${secs.toFixed(1)}s TO CROSS. GO!`}</span></div>`;
   fitText(card.querySelector('.c-msg'), innerHeight * .036);
   renderHopBtn(true);
   for (let k = 0; k < G.target - c.row; k++) sfx.pip(k);   // (v15) the hop pips fill one by one, each a note higher
@@ -1321,6 +1401,9 @@ function burst(x, y, txt, color, cls) {
   const el = document.createElement('div'); el.className = 'burst' + (cls ? ' ' + cls : ''); el.textContent = txt; el.style.color = color;
   x = clamp(x, 80, innerWidth - 80);   // (v15) never off the screen: a long one wraps onto two lines instead
   el.style.maxWidth = Math.max(150, 2 * Math.min(x, innerWidth - x) - 12) + 'px';
+  // (v17, "only the important things") a new word replaces any that would overlap it, and at most 2 show at once
+  if (SOLO) { const old = [...document.querySelectorAll('.burst')]; old.forEach((o) => { if (Math.abs(parseFloat(o.style.top) - y) < 56) o.remove(); });
+  const left = [...document.querySelectorAll('.burst')]; if (left.length >= 2) left.slice(0, left.length - 1).forEach((o) => o.remove()); }
   el.style.left = x + 'px'; el.style.top = y + 'px'; document.body.appendChild(el); setTimeout(() => el.remove(), 1300);
 }
 
@@ -1422,6 +1505,7 @@ function autoQuality(now) {
   fpsN++;
   if (now - fpsT < 2500) return;
   const fps = fpsN * 1000 / (now - fpsT); fpsN = 0; fpsT = now;
+  if (fps < 35 && POST.on && !document.hidden && !QS.get('post')) { POST.on = false; return; }   // (v17) first the look pass goes
   if (fps < 35 && pixNow > .6 && !document.hidden) { pixNow = Math.max(.6, pixNow * .8); renderer.setPixelRatio(pixNow); fitView(); }
   // (v15) still slow at the lowest resolution: a smaller shadow map (the ground spots under the racers stay)
   else if (fps < 32 && pixNow <= .6 && sun.shadow.mapSize.x > 1024 && !document.hidden) { sun.shadow.mapSize.set(1024, 1024); sun.shadow.map?.dispose(); sun.shadow.map = null; }
@@ -1460,8 +1544,8 @@ function frame(now) {
   else if (G && G.over && G.winner) camGoal.set(0, .3, -FINISH);
   else if (!G && !ICON) camGoal.set(0, 0, -START - .3);
   stepCam(rdt);
-  sun.position.set(camAt.x - 6, 14, camAt.z + 5); sun.target.position.copy(camAt);
-  renderer.render(scene, cam);
+  if (SOLO) sun.position.set(camAt.x - 7.5, 10.5, camAt.z + 6.5); else sun.position.set(camAt.x - 6, 14, camAt.z + 5); sun.target.position.copy(camAt);
+  POST.draw();
   updateTags();
   requestAnimationFrame(frame);
 }
@@ -1505,6 +1589,18 @@ const UPS = [
 const UP_COST = [40, 90, 160];
 const upLv = (id) => (SOLO ? (store.get('ups', {})[id] || 0) : 0);
 const myLevel = () => 1 + UPS.reduce((s, u) => s + upLv(u.id), 0), MAX_LEVEL = 1 + UPS.reduce((s, u) => s + u.max, 0);
+// (v17, draw calls) all the coins are ONE instanced mesh and all the ? boxes another; each pickup keeps an invisible
+// placeholder in its row (position, spin), and gets a real mesh only for its pop when someone picks it up
+const PICK_IM = {coin: null, box: null}, _pm4 = new THREE.Matrix4();
+function pickIM(kind, n) {
+  let im = PICK_IM[kind];
+  if (!im || im.instanceMatrix.count < n) {
+    if (im) scene.remove(im);
+    im = new THREE.InstancedMesh(kind === 'coin' ? COIN_GEO : BOX_GEO, kind === 'coin' ? MAT : BOX_MAT, Math.max(64, n));
+    im.castShadow = kind !== 'coin'; im.frustumCulled = false; im.count = 0; scene.add(im); PICK_IM[kind] = im;
+  }
+  return im;
+}
 function placePickups() {
   G.pick = [];
   const lanes = G.players.map((p) => p.ch.x), lucky = (p) => (p.you ? upLv('lucky') : 0);
@@ -1515,21 +1611,28 @@ function placePickups() {
     G.players.forEach((p, i) => {
       const k = kind || (!hz && r > START + 1 && Math.random() < .1 * lucky(p) ? 'box' : null); if (!k) return;
       if (k === 'coin' && row.type === 'river' && !padAt(row, lanes[i])) return;
-      const m = new THREE.Mesh(k === 'coin' ? COIN_GEO : BOX_GEO, k === 'coin' ? MAT : BOX_MAT);
-      m.position.set(lanes[i], groundAt(r) + (k === 'coin' ? .32 : .45), 0); m.castShadow = true; row.g.add(m);
+      const m = new THREE.Object3D();
+      m.position.set(lanes[i], groundAt(r) + (k === 'coin' ? .32 : .45), 0); row.g.add(m);
       const pk = {r, i, kind: k, m, taken: false}; (row.pick = row.pick || []).push(pk); G.pick.push(pk);
     });
   }
+  pickIM('coin', G.pick.length); pickIM('box', G.pick.length);
 }
 function spinPickups(dt) {
-  if (!G || !G.pick) return;
-  for (const pk of G.pick) if (!pk.taken && pk.m.parent?.visible) { pk.m.rotation.y += dt * (pk.kind === 'coin' ? 3 : 1.2); if (pk.kind === 'box') pk.m.position.y = groundAt(pk.r) + .45 + Math.sin(T * 3 + pk.r) * .06; }
+  const n = {coin: 0, box: 0};
+  if (G && G.pick) for (const pk of G.pick) if (!pk.taken && pk.m.parent?.visible) {
+    pk.m.rotation.y += dt * (pk.kind === 'coin' ? 3 : 1.2); if (pk.kind === 'box') pk.m.position.y = groundAt(pk.r) + .45 + Math.sin(T * 3 + pk.r) * .06;
+    const im = PICK_IM[pk.kind]; if (!im || n[pk.kind] >= im.instanceMatrix.count) continue;
+    pk.m.updateMatrix(); _pm4.multiplyMatrices(pk.m.parent.matrixWorld, pk.m.matrix); im.setMatrixAt(n[pk.kind]++, _pm4);
+  }
+  for (const k of ['coin', 'box']) { const im = PICK_IM[k]; if (im) { im.count = n[k]; im.instanceMatrix.needsUpdate = true; } }
 }
 function collect(c, r) {
   if (!G || !rows[r]?.pick) return;
   const p = G.players.find((x) => x.ch === c); if (!p) return;
   for (const pk of rows[r].pick) {
     if (pk.taken || pk.i !== p.i) continue;
+    { const real = new THREE.Mesh(pk.kind === 'coin' ? COIN_GEO : BOX_GEO, pk.kind === 'coin' ? MAT : BOX_MAT); real.position.copy(pk.m.position); real.rotation.copy(pk.m.rotation); pk.m.parent?.add(real); pk.m.parent?.remove(pk.m); pk.m = real; }   // (v17) a real one for the pop
     pk.taken = true; popOut(pk.m, pk.kind);   // (v15) the coin pops up spinning, the box bursts, instead of just vanishing
     if (pk.kind === 'coin') {
       const v = 1 + (p.you ? upLv('magnet') : 0); p.coins += v;
@@ -1918,5 +2021,5 @@ function hitSoon(r, x, dt) {
   if (row.type === 'river') { const pd = padAt(row, x); return !pd || padState(row, pd, T) !== 'up' || padState(row, pd, T + dt) !== 'up'; }
   return false;
 }
-window.HR = {FX, info: () => ({calls: renderer.info.render.calls, tris: renderer.info.render.triangles, parts: PARTS.count}), get calm() { return calm; }, set calm(v) { calm = !!v; }, closeCall, get trauma() { return trauma; }, get G() { return G; }, hitSoon, get rows() { return rows; }, chars: () => chars, answer, tapHop, danger, START: () => START, FINISH: () => FINISH,
+window.HR = {FX, scene, cam, sun, T3: THREE, info: () => ({calls: POST.calls, tris: POST.tris, parts: PARTS.count, post: POST.on}), get calm() { return calm; }, set calm(v) { calm = !!v; }, closeCall, get trauma() { return trauma; }, get G() { return G; }, hitSoon, get rows() { return rows; }, chars: () => chars, answer, tapHop, danger, START: () => START, FINISH: () => FINISH,
   rightIndex: () => G?.cur?.words.findIndex((w) => w.ok), setT: (t) => { T = t; }, startRace, SOLO, useItem, purse, openShop, rows: () => rows};
